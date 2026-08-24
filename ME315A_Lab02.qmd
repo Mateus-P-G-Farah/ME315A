@@ -1,0 +1,115 @@
+---
+title: "ME315A_Lab02a"
+author: "Mateus Farah"
+format: pdf
+editor: visual
+---
+
+# instalar pacote ggcal
+
+```{r}
+library(devtools)
+library(ggcal)
+```
+
+1. RESPOSTA
+Para determinar o percentual global de voos atrasados (Percentual = Atrasados \ Total) agrupando lotes de dados sem perda de precisão, as duas estatísticas suficientes necessárias para cada combinação de data e companhia aérea são:
+  - n_total: Contagem total de voos válidos (sem valores ausentes).
+  - n_atrasados: Contagem de voos com ARRIVAL_DELAY > 10.
+
+
+```{r}
+library(dplyr)
+library(readr)
+library(ggplot2)
+```
+
+2.
+
+```{r}
+library(dplyr)
+
+getStats <- function(input, pos) {
+  input %>%
+    filter(AIRLINE %in% c("AA", "DL", "UA", "US")) %>%
+    filter(!is.na(YEAR), !is.na(MONTH), !is.na(DAY), !is.na(AIRLINE), !is.na(ARRIVAL_DELAY)) %>%
+    group_by(YEAR, MONTH, DAY, AIRLINE) %>%
+    summarise(
+      n_atrasados = sum(ARRIVAL_DELAY > 10),
+      n_total = n(),
+      .groups = "drop"
+    )
+}
+```
+
+3.
+
+```{r}
+library(readr)
+
+dados_lotes <- read_csv_chunked(
+  file = "flights.csv.zip",
+  callback = DataFrameCallback$new(getStats),
+  chunk_size = 100000,
+  col_types = cols_only(
+    YEAR = col_integer(),
+    MONTH = col_integer(),
+    DAY = col_integer(),
+    AIRLINE = col_character(),
+    ARRIVAL_DELAY = col_double()
+  )
+)
+```
+
+4.
+
+```{r}
+computeStats <- function(stats_lotes) {
+  stats_lotes %>%
+    group_by(YEAR, MONTH, DAY, AIRLINE) %>%
+    summarise(
+      n_atrasados_total = sum(n_atrasados),
+      n_total_geral = sum(n_total),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      Cia = AIRLINE,
+      Data = as.Date(paste(YEAR, MONTH, DAY, sep = "-")),
+      Perc = n_atrasados_total / n_total_geral
+    ) %>%
+    select(Cia, Data, Perc)
+}
+
+# Execução da consolidação
+stats_finais <- computeStats(dados_lotes)
+```
+
+5.
+
+```{r}
+# a. Carregamento dos pacotes necessários
+# remotes::install_github("Atherenergy/ggcal")
+library(ggcal)
+library(ggplot2)
+
+# b. Definição da paleta de cores gradiente
+pal <- scale_fill_gradient(low = "#4575b4", high = "#d73027")
+
+# c. Função baseCalendario
+baseCalendario <- function(stats, cia) {
+  sub_stats <- stats %>% filter(Cia == cia)
+  ggcal(sub_stats$Data, sub_stats$Perc)
+}
+
+# d. Execução para cada Cia. Aérea
+cAA <- baseCalendario(stats_finais, "AA")
+cDL <- baseCalendario(stats_finais, "DL")
+cUA <- baseCalendario(stats_finais, "UA")
+cUS <- baseCalendario(stats_finais, "US")
+
+# e. Apresentação dos mapas de calor com títulos
+cAA + pal + ggtitle("Percentual de Atrasos - American Airlines (AA)")
+cDL + pal + ggtitle("Percentual de Atrasos - Delta Air Lines (DL)")
+cUA + pal + ggtitle("Percentual de Atrasos - United Airlines (UA)")
+cUS + pal + ggtitle("Percentual de Atrasos - US Airways (US)")
+```
