@@ -1,0 +1,116 @@
+---
+title: "ME315A_FarahLab03"
+author: "Mateus Farah"
+format: pdf
+editor: source
+---
+
+## Lab 03
+
+```{r}
+library(dplyr)
+library(readr)
+library(leaflet)
+library(tidyr)
+```
+
+```{r}
+airlines <- read.csv("airlines.csv")
+airports <- read.csv("airports.csv")
+```
+
+```{r}
+airlines <- read_csv("airlines.csv")
+
+airports <- read_csv("airports.csv")|>
+  select(IATA_CODE, CITY, STATE, LATITUDE, LONGITUDE)
+
+processar_chunk <- function(chunk, pos) {
+  chunk|>
+    filter(!startsWith(as.character(DESTINATION_AIRPORT), "1"))|> 
+    drop_na()|>                                                    
+    group_by(DESTINATION_AIRPORT)|>
+    summarise(
+      soma_atraso = sum(ARRIVAL_DELAY),
+      n = n(),
+      .groups = "drop"
+    )                                                                 }
+
+estatisticas_chunks <- read_csv_chunked(
+  "flights.csv",
+  callback = DataFrameCallback$new(processar_chunk),
+  chunk_size = 1000000,
+  col_types = cols_only(
+    DESTINATION_AIRPORT = col_character(),
+    ARRIVAL_DELAY = col_double()
+  ))
+flights <- estatisticas_chunks|>
+  group_by(DESTINATION_AIRPORT)|>
+  summarise(
+    media_atraso = sum(soma_atraso) / sum(n),
+    .groups = "drop"
+  )
+```
+
+
+
+
+2. a) A chave na tabela flights é "DESTINATION_AIRPORT"
+   b) A chave na tabela airports é "IATA_CODE"
+
+```{r}
+# Identifica quais aeroportos de flights não estão em airports
+aeroportos_ausentes <- flights|>
+  anti_join(airports, by = c("DESTINATION_AIRPORT" = "IATA_CODE"))
+print(aeroportos_ausentes)
+```
+```{r}
+flights <- flights|>
+  left_join(
+    airports|>
+      select(IATA_CODE, CITY, STATE), 
+    by = c("DESTINATION_AIRPORT" = "IATA_CODE"))
+```
+
+3.
+
+```{r}
+# Contagem de aeroportos por estado em ordem decrescente
+aeroportos_p_estado <- airports|>
+  group_by(STATE)|> 
+  summarise(qtd_aeroportos = n())|> 
+  arrange(desc(qtd_aeroportos))
+print(aeroportos_p_estado)
+```
+
+4.
+
+```{r}
+flights_mapa <- flights|>
+  inner_join(
+    airports|>
+      select(IATA_CODE, LATITUDE, LONGITUDE), 
+    by = c("DESTINATION_AIRPORT" = "IATA_CODE")
+  )|>
+  drop_na(LATITUDE, LONGITUDE)
+
+MAPA <- leaflet(flights_mapa)|>
+  addTiles()|> 
+  addMarkers(
+    lng = ~LONGITUDE, 
+    lat = ~LATITUDE,
+    popup = ~paste0("<b>Aeroporto: </b>", DESTINATION_AIRPORT, "<br>",
+                    "<b>Cidade: </b>", CITY, " - ", STATE, "<br>",
+                    "<b>Atraso Média: </b>", round(media_atraso, 2), " min"))
+MAPA
+```
+
+
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
+
+
+
