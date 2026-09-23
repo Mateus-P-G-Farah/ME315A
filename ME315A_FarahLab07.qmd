@@ -1,0 +1,180 @@
+---
+title: "ME315A_FarahLab07"
+author: "Mateus Farah"
+format: pdf
+editor: visual
+---
+
+## Lab 07
+
+1.  Baixe o arquivo uwmadison.sqlite3. Conecte-se a ele usando o pacote RSQLite, armazenando a conexão em uma variável conn.
+
+```{r}
+library(DBI)
+library(RSQLite)
+
+conn <- dbConnect(SQLite(), "database.sqlite3")
+```
+
+
+```{r}
+dbListTables(conn)
+```
+
+```{r}
+dbListFields(conn, "subjects")
+dbListFields(conn, "subject_memberships")
+dbListFields(conn, "course_offerings")
+dbListFields(conn, "sections")
+dbListFields(conn, "teachings")
+dbListFields(conn, "instructors")
+dbListFields(conn, "grade_distributions")
+```
+
+
+2.  Quem são e quantos são os professores que lecionaram disciplinas cujo tópico era estatística (subjects.abbreviation='STAT');
+
+```{sql connection=conn}
+SELECT DISTINCT instructors.id, instructors.name
+  FROM instructors
+  JOIN teachings ON teachings.instructor_id = instructors.id
+  JOIN sections ON sections.uuid = teachings.section_uuid
+  JOIN course_offerings ON course_offerings.uuid = sections.course_offering_uuid
+  JOIN subject_memberships ON subject_memberships.course_offering_uuid = course_offerings.uuid
+  JOIN subjects ON subjects.code = subject_memberships.subject_code
+  WHERE subjects.abbreviation = 'STAT'
+  ORDER BY instructors.name
+```
+
+3.  O GPA americano é definido numa escala de 0 a 4, em que A = 4, AB = 3.5, B = 3, BC = 2.5, C = 2, D = 1 e F = 0. Determinando a nota média de cada oferecimento pela ponderação da quantidade de alunos em cada extrato com os valores numéricos de cada conceito, indique (no que se referente a disciplinas no assunto de estatística):
+
+A)  Quem é o professor mais difícil?
+
+```{sql connection=conn}
+SELECT instructors.name,
+       SUM(grade_distributions.a_count*4 + grade_distributions.ab_count*3.5 +
+           grade_distributions.b_count*3 + grade_distributions.bc_count*2.5 +
+           grade_distributions.c_count*2 + grade_distributions.d_count*1) * 1.0 /
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS gpa_medio,
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS total_alunos
+FROM instructors
+JOIN teachings ON teachings.instructor_id = instructors.id
+JOIN sections ON sections.uuid = teachings.section_uuid
+JOIN course_offerings ON course_offerings.uuid = sections.course_offering_uuid
+JOIN subject_memberships ON subject_memberships.course_offering_uuid = course_offerings.uuid
+JOIN subjects ON subjects.code = subject_memberships.subject_code
+JOIN grade_distributions ON grade_distributions.course_offering_uuid = course_offerings.uuid
+                         AND grade_distributions.section_number = sections.number
+WHERE subjects.abbreviation = 'STAT'
+GROUP BY instructors.id, instructors.name
+HAVING total_alunos > 0
+ORDER BY gpa_medio ASC
+LIMIT 1
+```
+
+B)  Quem é o professor mais fácil?
+
+```{sql connection=conn}
+SELECT instructors.name,
+       SUM(grade_distributions.a_count*4 + grade_distributions.ab_count*3.5 +
+           grade_distributions.b_count*3 + grade_distributions.bc_count*2.5 +
+           grade_distributions.c_count*2 + grade_distributions.d_count*1) * 1.0 /
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS gpa_medio,
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS total_alunos
+FROM instructors
+JOIN teachings ON teachings.instructor_id = instructors.id
+JOIN sections ON sections.uuid = teachings.section_uuid
+JOIN course_offerings ON course_offerings.uuid = sections.course_offering_uuid
+JOIN subject_memberships ON subject_memberships.course_offering_uuid = course_offerings.uuid
+JOIN subjects ON subjects.code = subject_memberships.subject_code
+JOIN grade_distributions ON grade_distributions.course_offering_uuid = course_offerings.uuid
+                         AND grade_distributions.section_number = sections.number
+WHERE subjects.abbreviation = 'STAT'
+GROUP BY instructors.id, instructors.name
+HAVING total_alunos > 0
+ORDER BY gpa_medio DESC
+LIMIT 1
+```
+
+C)  Qual é a disciplina mais difícil?
+
+```{sql connection=conn}
+SELECT courses.name,
+       SUM(grade_distributions.a_count*4 + grade_distributions.ab_count*3.5 +
+           grade_distributions.b_count*3 + grade_distributions.bc_count*2.5 +
+           grade_distributions.c_count*2 + grade_distributions.d_count*1) * 1.0 /
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS gpa_medio,
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS total_alunos
+FROM courses
+JOIN course_offerings ON course_offerings.course_uuid = courses.uuid
+JOIN subject_memberships ON subject_memberships.course_offering_uuid = course_offerings.uuid
+JOIN subjects ON subjects.code = subject_memberships.subject_code
+JOIN sections ON sections.course_offering_uuid = course_offerings.uuid
+JOIN grade_distributions ON grade_distributions.course_offering_uuid = course_offerings.uuid
+                         AND grade_distributions.section_number = sections.number
+WHERE subjects.abbreviation = 'STAT'
+GROUP BY courses.uuid, courses.name
+HAVING total_alunos > 0
+ORDER BY gpa_medio ASC
+LIMIT 1
+```
+
+D)  Qual é a disciplina mais fácil?
+
+```{sql connection=conn}
+SELECT courses.name,
+       SUM(grade_distributions.a_count*4 + grade_distributions.ab_count*3.5 +
+           grade_distributions.b_count*3 + grade_distributions.bc_count*2.5 +
+           grade_distributions.c_count*2 + grade_distributions.d_count*1) * 1.0 /
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS gpa_medio,
+       SUM(grade_distributions.a_count + grade_distributions.ab_count +
+           grade_distributions.b_count + grade_distributions.bc_count +
+           grade_distributions.c_count + grade_distributions.d_count +
+           grade_distributions.f_count) AS total_alunos
+FROM courses
+JOIN course_offerings ON course_offerings.course_uuid = courses.uuid
+JOIN subject_memberships ON subject_memberships.course_offering_uuid = course_offerings.uuid
+JOIN subjects ON subjects.code = subject_memberships.subject_code
+JOIN sections ON sections.course_offering_uuid = course_offerings.uuid
+JOIN grade_distributions ON grade_distributions.course_offering_uuid = course_offerings.uuid
+                         AND grade_distributions.section_number = sections.number
+WHERE subjects.abbreviation = 'STAT'
+GROUP BY courses.uuid, courses.name
+HAVING total_alunos > 0
+ORDER BY gpa_medio DESC
+LIMIT 1
+```
+
+4.  Desconecte do banco de dados.
+
+```{r}
+dbDisconnect(conn)
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
+
+
